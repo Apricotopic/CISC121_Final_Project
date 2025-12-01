@@ -74,12 +74,12 @@ I chose Merge Sort for its guaranteed time complexity of $O(N \log N)$, which en
 ## **Author & Acknowledgment**
 
 **Author:** 
-    * **Hengyi Dong**
+* Hengyi Dong
+
 
 **Acknowledgment**
-
-* **Course**: CISC-121 (Introduction to Computing Science II)  
-* **Instructor**: Dr. Rahatara Ferdousi  
+* **Course**: CISC121
+* **Instructor**: Dr. Ruslan Kain
 * **Resources**:  
   * [Gradio](https://www.gradio.app/) for the web interface.  
   * [Matplotlib](https://matplotlib.org/) for generating real-time charts.  
