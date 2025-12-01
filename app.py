@@ -1,10 +1,11 @@
 import gradio as gr
 import random
-import matplotlib.pyplot as plt
 import copy
+# We import Figure directly to avoid memory leaks caused by pyplot's global state
+from matplotlib.figure import Figure
 
 
-# CLASS 1: The Core Function.
+# CLASS 1: The Core Function (Model)
 
 class MergeSortEngine:
     """
@@ -21,7 +22,7 @@ class MergeSortEngine:
         """
         Generates a new list of random integers.
         """
-        # Clear any existing data
+        # Clear any existing data to ensure a fresh start
         self.data = []
         self.history = []
         
@@ -32,7 +33,6 @@ class MergeSortEngine:
             self.data.append(random_num)
         
         # Save the initial state of the list to history
-        # We use deepcopy to make sure we store the actual values, not just a reference
         self.history.append(copy.deepcopy(self.data))
         
         return self.data
@@ -41,8 +41,13 @@ class MergeSortEngine:
         """
         Starts the merge sort process.
         """
+        # Clear history before starting a new sort to prevent memory buildup
+        # We keep the current state as the starting point
+        self.history = [copy.deepcopy(self.data)]
+        
         # Call the recursive sorting function on the whole list
         self.merge_sort_recursive(self.data, 0, len(self.data) - 1)
+        
         # Return the complete history so the UI can show the animation
         return self.history
 
@@ -89,7 +94,7 @@ class MergeSortEngine:
             k += 1
             
             # Save the current state of the list to history
-            # We do this after every change so the visualization can shows properly.
+            # We do this after every change so the visualization updates properly
             self.history.append(copy.deepcopy(self.data))
 
         # If there are items left in the left_half, add them to the main array
@@ -110,7 +115,7 @@ class MergeSortEngine:
 
 
 
-# CLASS 2: The Visualization.
+# CLASS 2: The Visualization (View)
 
 class VisualManager:
     """
@@ -120,8 +125,9 @@ class VisualManager:
         """
         Creates a bar chart figure based on the provided data.
         """
-        # Create the figure and axis
-        fig, ax = plt.subplots(figsize=(10, 6))
+
+        fig = Figure(figsize=(10, 6))
+        ax = fig.subplots()
         
         # Generate indices for the x-axis (0, 1, 2, ...)
         indices = range(len(data_list))
@@ -139,7 +145,7 @@ class VisualManager:
         ax.set_ylim(0, 110)
         
         # Adjust layout to prevent clipping
-        plt.tight_layout()
+        fig.tight_layout()
         
         return fig
 
@@ -147,25 +153,35 @@ class VisualManager:
 
 # MAIN APP SETUP
 
-
-# Create instances of our logic and visual classes
-sorter = MergeSortEngine()
 visualizer = VisualManager()
 
 def initialize_app():
     """
     Runs when the app starts or resets.
-    Generates random data and returns the initial plot.
+    Creates a new sorter instance for this specific user session.
+    Returns the new sorter object and the initial plot.
     """
-    initial_data = sorter.generate_data()
-    return visualizer.create_chart(initial_data, "Initial Random Data")
+    # Create a fresh engine for this user
+    new_sorter = MergeSortEngine()
+    initial_data = new_sorter.generate_data()
+    
+    # Create the chart
+    fig = visualizer.create_chart(initial_data, "Initial Random Data")
+    
+    # Return the chart AND the sorter instance (to be stored in State)
+    return fig, new_sorter
 
-def run_simulation():
+def run_simulation(current_sorter):
     """
-    Runs the sort and yields plots.
+    Runs the sort using the user's specific sorter instance.
     """
+    # If no sorter exists (e.g. page just loaded), create one
+    if current_sorter is None:
+        current_sorter = MergeSortEngine()
+        current_sorter.generate_data()
+
     # Get the history of all sorting steps
-    history = sorter.merge_sort_entry()
+    history = current_sorter.merge_sort_entry()
     
     # Loop through each step in the history
     total_steps = len(history)
@@ -179,7 +195,8 @@ def run_simulation():
         # Yield the figure to update the UI
         yield fig
 
-# Define the Gradio layout
+
+# Define the layout
 with gr.Blocks() as app:
     
     gr.Markdown("# 📉 Merge Sort Visualizer")
@@ -192,15 +209,18 @@ with gr.Blocks() as app:
     # The output area for the chart
     plot_output = gr.Plot(label="Sorting Visualization")
     
-    # Set up the event listeners
-    # Load initial data on startup
-    app.load(fn=initialize_app, inputs=None, outputs=plot_output)
+    # This prevents users from interfering with each other's sorting data.
+    sorter_state = gr.State()
+
     
-    # Generate new data when Reset is clicked
-    reset_btn.click(fn=initialize_app, inputs=None, outputs=plot_output)
+    # 1. On Page Load: Initialize data and store the sorter in 'sorter_state'
+    app.load(fn=initialize_app, inputs=None, outputs=[plot_output, sorter_state])
     
-    # Run the simulation when Start is clicked
-    start_btn.click(fn=run_simulation, inputs=None, outputs=plot_output)
+    # 2. On Reset: Create new data/sorter and update 'sorter_state'
+    reset_btn.click(fn=initialize_app, inputs=None, outputs=[plot_output, sorter_state])
+    
+    # 3. On Start: Use the sorter from 'sorter_state' to run the simulation
+    start_btn.click(fn=run_simulation, inputs=[sorter_state], outputs=plot_output)
 
 # Start the server
 if __name__ == "__main__":
